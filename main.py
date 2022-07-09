@@ -32,7 +32,7 @@ SAVE_RESULT_AS_VIDEO = False
 OVERWRITE_PREVIOUS_RESULT = False
 
 # Video file to write to (no effect if SAVE_RESULT_AS_VIDEO = False)
-OUTPUT_VIDEO_PATH = "multiTracker2.mp4"
+OUTPUT_VIDEO_PATH = "BOOSTING.mp4"
 
 # What detection model are we using? (YOLO, MASKRCNN)
 DETECTION_MODEL = "MASKRCNN"
@@ -65,9 +65,9 @@ MASKRCNN_DRAW_MASKS_INTENSITY = 0.5
 # Color is represented in BGR format
 MASKRCNN_DRAW_MASKS_COLOR = (255,0,0)
 
-# What method should we use to track bounding boxes in our model?
-# Options: naive
-BOUNDING_BOX_TRACKING_METHOD = "naive"
+# What model should we use to track bounding boxes in our model? (Case insensitive)
+# Options: BOOSTING, MIL, KCF (Recommended), TLD, MEDIANFLOW, GOTURN, MOSSE, CSRT
+BOUNDING_BOX_TRACKING_MODEL = "KCF"
 
 # How much overlap is required between the bounding box of a car detected last round versus a car
 # detected this round to prove that these two detections are the same car?
@@ -113,6 +113,23 @@ if hasattr(cv2, "legacy") == False:
 if not(DETECTION_MODEL in ["YOLO","MASKRCNN"]):
     print(DETECTION_MODEL,"is not a valid detection model")
     print("Please try \"YOLO\" or \"MASKRCNN\"")
+    exit()
+
+# Make sure the tracking model is valid
+trackingModels = {
+    "BOOSTING": lambda: cv2.legacy.TrackerBoosting_create(),
+    "MIL": lambda: cv2.legacy.TrackerMIL_create(),
+    "KCF": lambda: cv2.legacy.TrackerKCF_create(),
+    "TLD": lambda: cv2.legacy.TrackerTLD_create(),
+    "MEDIANFLOW": lambda: cv2.legacy.TrackerMedianFlow_create(),
+    "GOTURN": lambda: cv2.legacy.TrackerGOTURN_create(),
+    "MOSSE": lambda: cv2.legacy.TrackerMOSSE_create(),
+    "CSRT": lambda: cv2.legacy.TrackerCSRT_create(),
+}
+BOUNDING_BOX_TRACKING_MODEL = BOUNDING_BOX_TRACKING_MODEL.upper()
+if not (BOUNDING_BOX_TRACKING_MODEL in trackingModels.keys()):
+    print(BOUNDING_BOX_TRACKING_MODEL,"is not a valid tracking model")
+    print("Please try any of the following:"," ".join(trackingModels.keys()))
     exit()
 
 # Make sure the video exists
@@ -480,7 +497,8 @@ while True:
                     # car.opticalFlowPoints = cv2.goodFeaturesToTrack(grayFrame, mask=fullImageMask, maxCorners=100, qualityLevel=0.3, minDistance=3, blockSize=7)
 
                     # Register the car's bounding box with the multitracker
-                    multiTracker.add(cv2.legacy.TrackerKCF_create(), frame, [x, y, endX - x, endY - y])
+                    # Use the tracking model that the user specified in the config settings
+                    multiTracker.add(trackingModels.get(BOUNDING_BOX_TRACKING_MODEL)(), frame, [x, y, endX - x, endY - y])
 
         debugPrint(DETECTION_MODEL, "detection is complete")
         if MANUAL_HOMOGRAPHY == False:
@@ -516,7 +534,7 @@ while True:
     # Try to track each car through the video with optical flow
     warpedFrame = cv2.warpPerspective(frame, manualHomographyMatrix, (frameWidth, frameHeight)) if MANUAL_HOMOGRAPHY else 1
 
-    debugPrint("Tracking...")
+    debugPrint("Tracking with {model}...".format(model=BOUNDING_BOX_TRACKING_MODEL))
     if not (lastGrayFrame is None):
         success, boxes = multiTracker.update(frame)
 
