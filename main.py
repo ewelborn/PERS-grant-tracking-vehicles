@@ -176,6 +176,9 @@ while True:
     progress += 1
     ret, frame = cap.read()
 
+    if ret == False:
+        break
+
     totalFrames += 1
 
     frameWidth = frame.shape[1]
