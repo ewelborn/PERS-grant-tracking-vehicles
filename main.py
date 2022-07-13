@@ -358,12 +358,23 @@ while True:
             maskRCNNModel.setInput(imageBlob)
             boundingBoxes, masks = maskRCNNModel.forward(["detection_out_final", "detection_masks"])
 
-            for i in range(0, boundingBoxes.shape[2]):
+            # Use non-maximum suppression to avoid generate multiple bounding boxes
+            # for the same object
+            boxesList = [boundingBoxes[0, 0, i, 3:7] for i in range(0, boundingBoxes.shape[2])]
+            confidencesList = [boundingBoxes[0, 0, i, 2] for i in range(0, boundingBoxes.shape[2])]
+
+            # NMSBoxes takes two special arguments - score_threshold and nms_threshold
+            # score_threshold is used to filter out low confidence results (i.e. it's the minimum
+            #   confidence necessary to keep a result)
+            # nms_threshold is the maximum intersection allowed between two results
+            maxValueIDs = cv2.dnn.NMSBoxes(boxesList, confidencesList, config.DETECTION_MINIMUM_CONFIDENCE, config.NMS_THRESHOLD)
+
+            for i in maxValueIDs:
                 predictedClassID = int(boundingBoxes[0, 0, i, 1])
                 predictedClassLabel = COCOLabels[predictedClassID]
                 predictionConfidence = boundingBoxes[0, 0, i, 2]
 
-                if predictionConfidence >= config.DETECTION_MINIMUM_CONFIDENCE and predictedClassLabel in config.COCO_LABELS_TO_DETECT:
+                if predictedClassLabel in config.COCO_LABELS_TO_DETECT:
                     car = Car(currentCarID)
                     x, y, endX, endY = (boundingBoxes[0, 0, i, 3:7] * np.array([frameWidth, frameHeight, frameWidth, frameHeight])).astype("int")
                     car.boundingBox = BoundingBox(x, y, endX - x, endY - y)
