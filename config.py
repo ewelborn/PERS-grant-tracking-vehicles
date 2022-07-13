@@ -17,11 +17,15 @@ DETECTION_MODEL = "MASKRCNN"
 # This is to ensure we're only tracking vehicles, not other random objects in the frame.
 COCO_LABELS_TO_DETECT = ["car", "truck"]
 
-# How confident should our detection model be when detecting cars? (0 is no confidence, 1 is completely confident)
+# How confident should our detection model be when detecting vehicles? (0 is no confidence, 1 is completely confident)
 DETECTION_MINIMUM_CONFIDENCE = 0.3
 
 # How many frames should we wait until the detection model is allowed to detect cars again?
 DETECTION_REFRESH_RATE = 10
+
+# Non-maximum suppression is for reducing the likelihood of multiple detections for the same vehicle.
+# How much overlap is allowed between two competing detections? (0 is none, 1 is complete overlap)
+NMS_THRESHOLD = 0.7
 
 # Where are the YOLOv4 configuration and weight files contained? (No effect if DETECTION_MODEL != "YOLO")
 YOLO_CONFIG_PATH = "yolov4.cfg"
