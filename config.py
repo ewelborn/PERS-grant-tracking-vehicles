@@ -74,3 +74,9 @@ DRAW_BOUNDING_BOXES = True
 
 # How thick should the detection rectangles be? (In pixels)
 DRAWING_THICKNESS = 3
+
+# How many frames of information should we use to compute the vehicle's speed?
+# Less frames = faster response time to sudden change in vehicle speed
+# More frames = smoother, less jittery speed estimation of vehicle
+# Set this to 1 to disable smoothing
+VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES = 3
