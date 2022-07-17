@@ -145,7 +145,16 @@ class Car():
     def __init__(self,ID):
         self.color = random.choice(randomColors)
         self.ID = ID
-        self.KMH = 0
+        self.recordedKMH = []
+
+    def recordSpeed(self, KMH):
+        self.recordedKMH.append(KMH)
+        if len(self.recordedKMH) > config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES:
+            self.recordedKMH.pop(0)
+
+    def getKMH(self):
+        # Return the average of the recorded speeds, or 0 if there are no recorded speeds
+        return (sum(self.recordedKMH) / len(self.recordedKMH)) if len(self.recordedKMH) > 0 else 0
 
 currentCars = []
 oldCars = []
@@ -345,6 +354,7 @@ while True:
                 else:
                     car.ID = bestMatch.ID
                     car.color = bestMatch.color
+                    car.recordedKMH = bestMatch.recordedKMH
 
                 currentCars.append(car)
 
@@ -398,6 +408,7 @@ while True:
                     else:
                         car.ID = bestMatch.ID
                         car.color = bestMatch.color
+                        car.recordedKMH = bestMatch.recordedKMH
 
                     currentCars.append(car)
 
@@ -489,10 +500,12 @@ while True:
 
                 if config.MANUAL_HOMOGRAPHY:
                     metersPerSecond = (totalMovementInPixels * config.FPS) / manualHomography_pixelsToMeters
-                    car.KMH = (metersPerSecond * 60 * 60) / 1000
+                    #car.KMH = (metersPerSecond * 60 * 60) / 1000
+                    car.recordSpeed((metersPerSecond * 60 * 60) / 1000)
                 else:
                     metersPerSecond = (totalMovementInPixels * config.FPS) / 10
-                    car.KMH = (metersPerSecond * 60 * 60) / 1000
+                    #car.KMH = (metersPerSecond * 60 * 60) / 1000
+                    car.recordSpeed((metersPerSecond * 60 * 60) / 1000)
 
                     
     debugPrint("Tracking complete")
@@ -542,7 +555,7 @@ while True:
     for car in currentCars:
         if config.DRAW_BOUNDING_BOXES:
             cv2.rectangle(drawingLayer, (car.boundingBox.getX(), car.boundingBox.getY()), (car.boundingBox.getEndX(), car.boundingBox.getEndY()), car.color, thickness = config.DRAWING_THICKNESS)
-            text = "ID: {ID} ; KMH: {KMH:.2f}".format(ID=car.ID,KMH=car.KMH)
+            text = "ID: {ID} ; KMH: {KMH:.2f}".format(ID=car.ID,KMH=car.getKMH())
             fontFace = cv2.FONT_HERSHEY_SIMPLEX
             fontScale = 0.5
             thickness = 2
