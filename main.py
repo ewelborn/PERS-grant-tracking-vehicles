@@ -30,10 +30,34 @@ if hasattr(cv2, "legacy") == False:
     print("Recommended pip package is 'opencv-contrib-python' (4.6.0.66)")
 
 # Make sure the detection model is valid
-if not(config.DETECTION_MODEL in ["YOLO","MASKRCNN"]):
-    print(config.DETECTION_MODEL,"is not a valid detection model")
+config.DETECTION_MODEL = config.DETECTION_MODEL.upper()
+if not(config.DETECTION_MODEL in ["YOLO", "MASKRCNN"]):
+    print(config.DETECTION_MODEL, "is not a valid detection model")
     print("Please try \"YOLO\" or \"MASKRCNN\"")
     exit()
+
+# Make sure that HOMOGRAPHY_INFERENCE is valid
+config.HOMOGRAPHY_INFERENCE = config.HOMOGRAPHY_INFERENCE.upper()
+if not (config.HOMOGRAPHY_INFERENCE in ["MANUAL", "AUTO", "LOADFILE"]):
+    print(config.HOMOGRAPHY_INFERENCE, "is not a valid inference setting")
+    print("Please try \"MANUAL\", \"AUTO\", or \"LOADFILE\"")
+    exit()
+
+# If we're loading the homography from a file, ensure that it's loading correctly
+manualHomographyMatrix = None
+if config.HOMOGRAPHY_INFERENCE == "LOADFILE":
+    if not os.path.isfile(config.HOMOGRAPHY_FILE):
+        print("Could not find homography file:",config.HOMOGRAPHY_FILE)
+        exit()
+
+    manualHomographyMatrix = np.load(config.HOMOGRAPHY_FILE)
+
+# If we're saving the homography to a file, make sure it doesn't already exist!
+# (Or if it does, make sure we're allowed to overwrite it)
+if config.HOMOGRAPHY_INFERENCE == "MANUAL" and config.HOMOGRAPHY_SAVE_TO_FILE:
+    if config.HOMOGRAPHY_SAVE_TO_FILE_OVERWRITE == False and os.path.isfile(config.HOMOGRAPHY_FILE):
+        print("Manual homography already exists at path:",config.HOMOGRAPHY_FILE)
+        exit()
 
 # Make sure the tracking model is valid
 trackingModels = {
@@ -178,8 +202,8 @@ def findPointInWarpedImage(p, matrix):
     return (int(px), int(py))
 
 # Only used with manual homography
-manualHomographyMatrix = None
 manualHomography_pixelsToMeters = 0
+manualHomography_pointSize = 10
 
 multiTracker = cv2.legacy.MultiTracker_create()
 
@@ -211,7 +235,10 @@ while True:
 
     grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    if config.MANUAL_HOMOGRAPHY and firstFrame:
+    if config.HOMOGRAPHY_INFERENCE == "MANUAL" and firstFrame:
+        if config.HOMOGRAPHY_SAVE_TO_FILE:
+            print("The following selection will be saved to disk at", config.HOMOGRAPHY_FILE, "\n")
+
         print("Please select the four corners of a car in the frame.")
         print("BLUE: Front left headlight")
         print("RED: Front right headlight")
@@ -221,7 +248,6 @@ while True:
 
         manualHomography_points = [[50,50],[100,50],[100,100],[50,100]]
         manualHomography_selectedPoint = None
-        manualHomography_pointSize = 10
         def onMouse(event, x, y, flags, params):
             global manualHomography_selectedPoint
             selectedDistance = 0
@@ -269,11 +295,13 @@ while True:
         carReferencePoints = np.array(MEAN_SEDAN_BOUNDING_BOX) + np.array([[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2]])
         manualHomographyMatrix, status = cv2.findHomography(np.array(manualHomography_points), carReferencePoints)
 
-        #warpedFrame = cv2.warpPerspective(frame, manualHomographyMatrix, (frameWidth*4, frameHeight*4))
-        #cv2.imwrite("output.png",warpedFrame)
-        #exit()
-
         print("Homography calculated.")
+
+        # Save the homography matrix if applicable
+        if config.HOMOGRAPHY_SAVE_TO_FILE:
+            np.save(config.HOMOGRAPHY_FILE, manualHomographyMatrix)
+            print("Homography saved.")
+
         meters = float(input("Please estimate the length of the car in meters (from headlight to tail-light): "))
         
         leftHeadLight = findPointInWarpedImage(manualHomography_points[0], manualHomographyMatrix)
@@ -438,7 +466,7 @@ while True:
                     multiTracker.add(trackingModels.get(config.BOUNDING_BOX_TRACKING_MODEL)(), frame, [x, y, endX - x, endY - y])
 
         debugPrint(config.DETECTION_MODEL, "detection is complete")
-        if config.MANUAL_HOMOGRAPHY == False:
+        if config.HOMOGRAPHY_INFERENCE == "AUTO":
             # Create homographies for the cars
             debugPrint("Calculating homographies...")
         
@@ -488,7 +516,7 @@ while True:
         progress = 0
 
     # Try to track each car through the video with optical flow
-    warpedFrame = cv2.warpPerspective(frame, manualHomographyMatrix, (frameWidth, frameHeight)) if config.MANUAL_HOMOGRAPHY else 1
+    warpedFrame = cv2.warpPerspective(frame, manualHomographyMatrix, (frameWidth, frameHeight)) if config.HOMOGRAPHY_INFERENCE != "AUTO" else 1
 
     if (not (lastGrayFrame is None)) and detectedThisFrame == False:
         debugPrint("Tracking with {model}...".format(model=config.BOUNDING_BOX_TRACKING_MODEL))
@@ -502,7 +530,7 @@ while True:
             oldBoundingBox = car.boundingBox
             car.boundingBox = BoundingBox(box[0], box[1], box[2], box[3])
             if car.boundingBox.getArea() != 0 and oldBoundingBox is not None:
-                homography = manualHomographyMatrix if config.MANUAL_HOMOGRAPHY else car.homographyMatrix
+                homography = manualHomographyMatrix if config.HOMOGRAPHY_INFERENCE != "AUTO" else car.homographyMatrix
 
                 # Estimate the car's speed based on the movement of
                 # the bounding box in the top-down image
@@ -522,6 +550,9 @@ while True:
                     car.previousTheta = thetaInRadians
                 #print(dx,dy,thetaInRadians)
                 carReferencePoints = np.array(MEAN_SEDAN_BOUNDING_BOX)
+
+                # Determine if the 3D bounding box is properly fitting the vehicle or not
+
 
                 # Translate the reference points so that the center of the
                 # rectangle is 0,0
@@ -550,7 +581,7 @@ while True:
                 
                 totalMovementInPixels = math.sqrt((dx * dx) + (dy * dy))
 
-                if config.MANUAL_HOMOGRAPHY:
+                if config.HOMOGRAPHY_INFERENCE != "AUTO":
                     metersPerSecond = (totalMovementInPixels * config.FPS) / config.HOMOGRAPHY_SCALING_FACTOR
                     #car.KMH = (metersPerSecond * 60 * 60) / 1000
                     car.recordSpeed((metersPerSecond * 60 * 60) / 1000)
@@ -582,7 +613,7 @@ while True:
         # Combine the frame containing the masks to the original frame
         frame = cv2.addWeighted(frame, 1 - config.MASKRCNN_DRAW_MASKS_INTENSITY, maskRCNNDrawingMask.astype("uint8"), config.MASKRCNN_DRAW_MASKS_INTENSITY, 0)
 
-    if config.MANUAL_HOMOGRAPHY and config.DRAW_MANUAL_HOMOGRAPHY:
+    if config.HOMOGRAPHY_INFERENCE != "AUTO" and config.DRAW_MANUAL_HOMOGRAPHY:
         # Draw the bounding boxes for the cars on the warped image as well
         for car in currentCars:
             start = findPointInWarpedImage((car.boundingBox.getX(), car.boundingBox.getY()), manualHomographyMatrix)
@@ -598,12 +629,15 @@ while True:
                 y = point[1]# + car.boundingBox.getY()
                 cv2.circle(warpedFrame, (int(x), int(y)), int(manualHomography_pointSize/2), car.color, -1)
 
-        for i in range(len(manualHomography_points)):
-            point = manualHomography_points[i]
-            color = [(255,100,100),(100,100,255),(100,175,255),(100,255,100)][i]
-            warpedPoint = findPointInWarpedImage(point, manualHomographyMatrix)
-            cv2.circle(warpedFrame, warpedPoint, manualHomography_pointSize, color, -1)
-            cv2.circle(warpedFrame, warpedPoint, int(manualHomography_pointSize/2), [c/3 for c in color], -1)
+        # If the user loaded the homography from a file, then we don't have access
+        # to the original points - just the resulting matrix. Ignore them!
+        if config.HOMOGRAPHY_INFERENCE == "MANUAL":
+            for i in range(len(manualHomography_points)):
+                point = manualHomography_points[i]
+                color = [(255,100,100),(100,100,255),(100,175,255),(100,255,100)][i]
+                warpedPoint = findPointInWarpedImage(point, manualHomographyMatrix)
+                cv2.circle(warpedFrame, warpedPoint, manualHomography_pointSize, color, -1)
+                cv2.circle(warpedFrame, warpedPoint, int(manualHomography_pointSize/2), [c/3 for c in color], -1)
 
         cv2.imshow("Vehicle Tracking (Bird's Eye)",warpedFrame)
 
