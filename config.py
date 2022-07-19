@@ -62,11 +62,20 @@ DEBUG = True
 # Should the time code be printed along with the debug information?
 DEBUG_TIMECODE = True
 
-# Should the computer try to automatically detect homographies (False), or should
-# the user be prompted to enter the homography manually (True)?
-MANUAL_HOMOGRAPHY = True
+# How should the computer determine the homography for tracking vehicles?
+# Options: AUTO, MANUAL, LOADFILE
+HOMOGRAPHY_INFERENCE = "loadfile"
 
-# Should we draw what the warped image looks like? Has no effect if MANUAL_HOMOGRAPHY is False
+# If HOMOGRAPHY_INFERENCE is MANUAL and HOMOGRAPHY_SAVE_TO_FILE is true, then this is
+# the file we save the homography to.
+# If HOMOGRAPHY_INFERENCE is LOADFILE, then this is the file we load the homography from.
+HOMOGRAPHY_FILE = "cam_10.npy"
+HOMOGRAPHY_SAVE_TO_FILE = True
+
+# Can we overwrite a pre-existing homography?
+HOMOGRAPHY_SAVE_TO_FILE_OVERWRITE = False
+
+# Should we draw what the warped image looks like? Has no effect if HOMOGRAPHY_INFERENCE is AUTO
 DRAW_MANUAL_HOMOGRAPHY = True
 
 # Should the bounding boxes and labels for the detected cars be drawn?
