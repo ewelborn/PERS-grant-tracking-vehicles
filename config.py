@@ -1,6 +1,6 @@
 # Video file to read
 VIDEO_PATH = "\\Datasets\\cam_10.mp4"
-#VIDEO_PATH = "slow_traffic_small.mp4"
+#VIDEO_PATH = "thermalSequence4.mp4"
 
 # Do you want the results stored to your computer as a video file? 
 # Is overwriting a previous video file okay?
@@ -8,7 +8,7 @@ SAVE_RESULT_AS_VIDEO = False
 OVERWRITE_PREVIOUS_RESULT = False
 
 # Video file to write to (no effect if SAVE_RESULT_AS_VIDEO = False)
-OUTPUT_VIDEO_PATH = "BOOSTING.mp4"
+OUTPUT_VIDEO_PATH = "boundingBoxes3D_2.mp4"
 
 # What detection model are we using? (YOLO, MASKRCNN)
 DETECTION_MODEL = "MASKRCNN"
@@ -40,7 +40,7 @@ MASKRCNN_PIXEL_SEGMENTATION_THRESHOLD = 0.2
 
 # Should the detected masks be drawn? If so, what intensity and color should they be drawn with?
 # (No effect if DETECTION_MODEL != "maskRCNN")
-MASKRCNN_DRAW_MASKS = True
+MASKRCNN_DRAW_MASKS = False
 MASKRCNN_DRAW_MASKS_INTENSITY = 0.5
 # Color is represented in BGR format
 MASKRCNN_DRAW_MASKS_COLOR = (255,0,0)
@@ -64,13 +64,15 @@ DEBUG_TIMECODE = True
 
 # Should the computer try to automatically detect homographies (False), or should
 # the user be prompted to enter the homography manually (True)?
-MANUAL_HOMOGRAPHY = False
+MANUAL_HOMOGRAPHY = True
 
 # Should we draw what the warped image looks like? Has no effect if MANUAL_HOMOGRAPHY is False
 DRAW_MANUAL_HOMOGRAPHY = True
 
 # Should the bounding boxes and labels for the detected cars be drawn?
-DRAW_BOUNDING_BOXES = True
+DRAW_2D_BOUNDING_BOXES = False
+DRAW_3D_BOUNDING_BOXES = True
+DRAW_LABELS = True
 
 # How thick should the detection rectangles be? (In pixels)
 DRAWING_THICKNESS = 3
@@ -80,3 +82,8 @@ DRAWING_THICKNESS = 3
 # More frames = smoother, less jittery speed estimation of vehicle
 # Set this to 1 to disable smoothing
 VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES = 3
+
+# By what factor should the homography be scaled? Higher values will be more intensive
+# on the PC, lower values result in lower tracking accuracy.
+# Recommended: 10
+HOMOGRAPHY_SCALING_FACTOR = 10
