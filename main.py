@@ -84,6 +84,12 @@ COCOLabels = ["person","bicycle","car","motorcycle","airplane","bus","train","tr
 
 randomColors = [(255,0,0), (0,255,0), (0,0,255)]
 
+# back-left, back-right, front-right, front-left
+# https://www.thezebra.com/resources/driving/average-car-size/
+# Average car length: 14.7 feet --> 4.48 meters
+# Average car width: 5.8 feet --> 1.77 meters
+MEAN_SEDAN_BOUNDING_BOX = [[0, 0],[1.77 * config.HOMOGRAPHY_SCALING_FACTOR, 0],[1.77 * config.HOMOGRAPHY_SCALING_FACTOR, 4.48 * config.HOMOGRAPHY_SCALING_FACTOR],[0, 4.48 * config.HOMOGRAPHY_SCALING_FACTOR]]
+
 def debugPrint(*args):
     if config.DEBUG:
         if config.DEBUG_TIMECODE:
@@ -93,6 +99,7 @@ def debugPrint(*args):
         else:
             print(*args)
 
+# 2D
 class BoundingBox():
     def __init__(self, x, y, width, height):
         self.x = int(x)
@@ -146,6 +153,9 @@ class Car():
         self.color = random.choice(randomColors)
         self.ID = ID
         self.recordedKMH = []
+        self.screenPoints = []
+        self.u_screenPoints = []
+        self.previousTheta = 0
 
     def recordSpeed(self, KMH):
         self.recordedKMH.append(KMH)
@@ -180,6 +190,7 @@ out = None
 progress = 0
 firstFrame = True
 lastGrayFrame = None
+detectedThisFrame = False
 totalFrames = 0
 while True:
     progress += 1
@@ -189,6 +200,8 @@ while True:
         break
 
     totalFrames += 1
+
+    detectedThisFrame = False
 
     frameWidth = frame.shape[1]
     frameHeight = frame.shape[0]
@@ -206,7 +219,7 @@ while True:
         print("ORANGE: Back right tail-light")
         print("\nWhen you are done, press SPACE to continue.")
 
-        manualHomography_points = [[50,50],[100,50],[50,100],[100,100]]
+        manualHomography_points = [[50,50],[100,50],[100,100],[50,100]]
         manualHomography_selectedPoint = None
         manualHomography_pointSize = 10
         def onMouse(event, x, y, flags, params):
@@ -235,7 +248,7 @@ while True:
 
             for i in range(len(manualHomography_points)):
                 point = manualHomography_points[i]
-                color = [(255,100,100),(100,100,255),(100,255,100),(100,175,255)][i]
+                color = [(255,100,100),(100,100,255),(100,175,255),(100,255,100)][i]
                 cv2.circle(newImage,(point[0], point[1]),manualHomography_pointSize,color,-1)
                 cv2.circle(newImage,(point[0], point[1]),manualHomography_pointSize-4,[c/3 for c in color],-1)
 
@@ -253,7 +266,7 @@ while True:
         # https://www.thezebra.com/resources/driving/average-car-size/
         # Average car length: 14.7 feet
         # Average car width: 5.8 feet
-        carReferencePoints = np.array([[0, 0],[58, 0],[0, 147],[58, 147]]) + np.array([[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2]])
+        carReferencePoints = np.array(MEAN_SEDAN_BOUNDING_BOX) + np.array([[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2]])
         manualHomographyMatrix, status = cv2.findHomography(np.array(manualHomography_points), carReferencePoints)
 
         #warpedFrame = cv2.warpPerspective(frame, manualHomographyMatrix, (frameWidth*4, frameHeight*4))
@@ -281,6 +294,7 @@ while True:
 
     if progress >= config.DETECTION_REFRESH_RATE:
         debugPrint(config.DETECTION_MODEL, "detecting...")
+        detectedThisFrame = True
 
         # Clear the cars list and prepare it for the new cars
         oldCars = currentCars
@@ -409,6 +423,7 @@ while True:
                         car.ID = bestMatch.ID
                         car.color = bestMatch.color
                         car.recordedKMH = bestMatch.recordedKMH
+                        car.screenPoints = bestMatch.screenPoints
 
                     currentCars.append(car)
 
@@ -433,7 +448,7 @@ while True:
                 # https://www.thezebra.com/resources/driving/average-car-size/
                 # Average car length: 14.7 feet --> 4.48 meters
                 # Average car width: 5.8 feet --> 1.77 meters
-                carReferencePoints = np.array([[0, 0],[17.7, 0],[17.7, 44.8],[0, 44.8]])
+                carReferencePoints = MEAN_SEDAN_BOUNDING_BOX
                 offset = np.array([[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2],[frameWidth//2, frameHeight//2]])
                 
                 # Naive: use the bounding box coordinates for the homography
@@ -475,8 +490,8 @@ while True:
     # Try to track each car through the video with optical flow
     warpedFrame = cv2.warpPerspective(frame, manualHomographyMatrix, (frameWidth, frameHeight)) if config.MANUAL_HOMOGRAPHY else 1
 
-    debugPrint("Tracking with {model}...".format(model=config.BOUNDING_BOX_TRACKING_MODEL))
-    if not (lastGrayFrame is None):
+    if (not (lastGrayFrame is None)) and detectedThisFrame == False:
+        debugPrint("Tracking with {model}...".format(model=config.BOUNDING_BOX_TRACKING_MODEL))
         success, boxes = multiTracker.update(frame)
 
         for i in range(len(currentCars)):
@@ -496,19 +511,55 @@ while True:
                 dx = newX - oldX
                 dy = newY - oldY
 
+                # Generate the 3D bounding box
+                # Find the angle of motion
+                thetaInRadians = math.atan2(dy, dx) + (math.pi / 2)
+                # If we don't have any information to adjust the angle of motion
+                # (the car didn't move), then use the last angle of motion instead
+                if dx == 0 and dy == 0:
+                    thetaInRadians = car.previousTheta
+                else:
+                    car.previousTheta = thetaInRadians
+                #print(dx,dy,thetaInRadians)
+                carReferencePoints = np.array(MEAN_SEDAN_BOUNDING_BOX)
+
+                # Translate the reference points so that the center of the
+                # rectangle is 0,0
+                centerX = max([p[0] for p in carReferencePoints]) / 2
+                centerY = max([p[1] for p in carReferencePoints]) / 2
+                carReferencePoints -= np.array([[centerX, centerY],[centerX, centerY],[centerX, centerY],[centerX, centerY]])
+                #print(carReferencePoints)
+
+                # Rotate the reference points around the origin (0,0)
+                for point in carReferencePoints:
+                    # https://stackoverflow.com/questions/34372480/rotate-point-about-another-point-in-degrees-python
+                    px = (math.cos(thetaInRadians) * (point[0])) - (math.sin(thetaInRadians) * (point[1]))
+                    py = (math.sin(thetaInRadians) * (point[0])) + (math.cos(thetaInRadians) * (point[1]))
+                    point[0] = px
+                    point[1] = py
+
+                # Translate the reference points so that their new origin is the center
+                # of the car's new bounding box
+                carReferencePoints += np.array([[newX, newY],[newX, newY],[newX, newY],[newX, newY]])
+
+                inverseHomography = np.linalg.inv(homography)
+
+                car.u_screenPoints = [p for p in carReferencePoints]
+                car.screenPoints = [findPointInWarpedImage(p, inverseHomography) for p in carReferencePoints]
+
+                
                 totalMovementInPixels = math.sqrt((dx * dx) + (dy * dy))
 
                 if config.MANUAL_HOMOGRAPHY:
-                    metersPerSecond = (totalMovementInPixels * config.FPS) / manualHomography_pixelsToMeters
+                    metersPerSecond = (totalMovementInPixels * config.FPS) / config.HOMOGRAPHY_SCALING_FACTOR
                     #car.KMH = (metersPerSecond * 60 * 60) / 1000
                     car.recordSpeed((metersPerSecond * 60 * 60) / 1000)
                 else:
                     metersPerSecond = (totalMovementInPixels * config.FPS) / 10
                     #car.KMH = (metersPerSecond * 60 * 60) / 1000
                     car.recordSpeed((metersPerSecond * 60 * 60) / 1000)
-
-                    
-    debugPrint("Tracking complete")
+          
+        debugPrint("Tracking complete")
 
     # Draw the bounding boxes on the screen so that the user can see what's being tracked
     drawingLayer = np.zeros_like(frame)
@@ -542,19 +593,47 @@ while True:
             maxY = max(start[1], end[1])
             cv2.rectangle(warpedFrame, (minX, minY), (maxX, maxY), car.color, thickness = config.DRAWING_THICKNESS)
 
+            for point in car.u_screenPoints:
+                x = point[0]# + car.boundingBox.getX()
+                y = point[1]# + car.boundingBox.getY()
+                cv2.circle(warpedFrame, (int(x), int(y)), int(manualHomography_pointSize/2), car.color, -1)
+
         for i in range(len(manualHomography_points)):
             point = manualHomography_points[i]
-            color = [(255,100,100),(100,100,255),(100,255,100),(100,175,255)][i]
+            color = [(255,100,100),(100,100,255),(100,175,255),(100,255,100)][i]
             warpedPoint = findPointInWarpedImage(point, manualHomographyMatrix)
-            cv2.circle(warpedFrame,warpedPoint,manualHomography_pointSize,color,-1)
-            cv2.circle(warpedFrame,warpedPoint,int(manualHomography_pointSize/2),[c/3 for c in color],-1)
+            cv2.circle(warpedFrame, warpedPoint, manualHomography_pointSize, color, -1)
+            cv2.circle(warpedFrame, warpedPoint, int(manualHomography_pointSize/2), [c/3 for c in color], -1)
 
         cv2.imshow("Vehicle Tracking (Bird's Eye)",warpedFrame)
 
     # Draw the labels last, so that they're on top of everything else in the image
     for car in currentCars:
-        if config.DRAW_BOUNDING_BOXES:
+        if config.DRAW_3D_BOUNDING_BOXES and len(car.screenPoints) > 0 and car.boundingBox.getArea() > 0:
+            # back-left, back-right, front-right, front-left
+            backLeft = car.screenPoints[0]
+            backRight = car.screenPoints[1]
+            frontRight = car.screenPoints[2]
+            frontLeft = car.screenPoints[3]
+
+            for point in car.screenPoints:
+                x = point[0]# + car.boundingBox.getX()
+                y = point[1]# + car.boundingBox.getY()
+                cv2.circle(frame, (x, y - 20), int(manualHomography_pointSize/2), car.color, -1)
+                cv2.circle(frame, (x, y + 20), int(manualHomography_pointSize/2), car.color, -1)
+                cv2.line(frame, (x, y - 20), (x, y + 20), car.color, 2)
+
+            for yOffset in (-20, 20):
+                for pointA in (backLeft, backRight, frontRight, frontLeft):
+                    for pointB in (backLeft, backRight, frontRight, frontLeft):
+                        if pointA[0] == pointB[0] and pointA[1] == pointB[1]:
+                            continue
+                        cv2.line(frame, (pointA[0], pointA[1] + yOffset), (pointB[0], pointB[1] + yOffset), car.color, 2)
+
+        if config.DRAW_2D_BOUNDING_BOXES:
             cv2.rectangle(drawingLayer, (car.boundingBox.getX(), car.boundingBox.getY()), (car.boundingBox.getEndX(), car.boundingBox.getEndY()), car.color, thickness = config.DRAWING_THICKNESS)
+        
+        if config.DRAW_LABELS:
             text = "ID: {ID} ; KMH: {KMH:.2f}".format(ID=car.ID,KMH=car.getKMH())
             fontFace = cv2.FONT_HERSHEY_SIMPLEX
             fontScale = 0.5
