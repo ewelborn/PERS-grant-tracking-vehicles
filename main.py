@@ -180,6 +180,7 @@ class Car():
         self.screenPoints = []
         self.u_screenPoints = []
         self.previousTheta = 0
+        self.height = 0
 
     def recordSpeed(self, KMH):
         self.recordedKMH.append(KMH)
@@ -404,7 +405,10 @@ while True:
                 mask = np.zeros_like(grayFrame)
                 # KEEP IN MIND!! The frame is in the form of [Y][X]
                 mask[car.boundingBox.getY():car.boundingBox.getEndY(), car.boundingBox.getX():car.boundingBox.getEndX()] = 255
-                car.opticalFlowPoints = cv2.goodFeaturesToTrack(grayFrame, mask=mask, maxCorners=100, qualityLevel=0.3, minDistance=3, blockSize=7)
+                
+                # Register the car's bounding box with the multitracker
+                # Use the tracking model that the user specified in the config settings
+                multiTracker.add(trackingModels.get(config.BOUNDING_BOX_TRACKING_MODEL)(), frame, [car.boundingBox.getX(), car.boundingBox.getY(), car.boundingBox.getWidth(), car.boundingBox.getHeight()])
         
         elif config.DETECTION_MODEL == "MASKRCNN":
             imageBlob = cv2.dnn.blobFromImage(frame, swapRB=True, crop=False)
@@ -552,7 +556,35 @@ while True:
                 carReferencePoints = np.array(MEAN_SEDAN_BOUNDING_BOX)
 
                 # Determine if the 3D bounding box is properly fitting the vehicle or not
+                boundingBoxPoints = (
+                    (car.boundingBox.getX(),    car.boundingBox.getY()),
+                    (car.boundingBox.getX(),    car.boundingBox.getEndY()),
+                    (car.boundingBox.getEndX(), car.boundingBox.getEndY()),
+                    (car.boundingBox.getEndX(), car.boundingBox.getY()),
+                )
+                boundingBoxPoints = [findPointInWarpedImage(point, homography) for point in boundingBoxPoints]
+                
+                boundingBoxMinX = min([point[0] for point in boundingBoxPoints])
+                boundingBoxMinY = min([point[1] for point in boundingBoxPoints])
+                boundingBoxMaxX = max([point[0] for point in boundingBoxPoints])
+                boundingBoxMaxY = max([point[1] for point in boundingBoxPoints])
+                
+                boundingBoxWidth = boundingBoxMaxX - boundingBoxMinX
+                boundingBoxHeight = boundingBoxMaxY - boundingBoxMinY
 
+                referenceMinX = min([point[0] for point in carReferencePoints])
+                referenceMinY = min([point[1] for point in carReferencePoints])
+                referenceMaxX = max([point[0] for point in carReferencePoints])
+                referenceMaxY = max([point[1] for point in carReferencePoints])
+                
+                referenceWidth = referenceMaxX - referenceMinX
+                referenceHeight = referenceMaxY - referenceMinY
+
+                scale = min(boundingBoxWidth / referenceWidth, boundingBoxHeight / referenceHeight) * 0.8
+
+                carReferencePoints = carReferencePoints * scale
+
+                car.height = int(referenceHeight * 0.6)
 
                 # Translate the reference points so that the center of the
                 # rectangle is 0,0
@@ -650,14 +682,16 @@ while True:
             frontRight = car.screenPoints[2]
             frontLeft = car.screenPoints[3]
 
+            height = car.height
+
             for point in car.screenPoints:
                 x = point[0]# + car.boundingBox.getX()
                 y = point[1]# + car.boundingBox.getY()
-                cv2.circle(frame, (x, y - 20), int(manualHomography_pointSize/2), car.color, -1)
-                cv2.circle(frame, (x, y + 20), int(manualHomography_pointSize/2), car.color, -1)
-                cv2.line(frame, (x, y - 20), (x, y + 20), car.color, 2)
+                cv2.circle(frame, (x, y - height), int(manualHomography_pointSize/2), car.color, -1)
+                cv2.circle(frame, (x, y + height), int(manualHomography_pointSize/2), car.color, -1)
+                cv2.line(frame, (x, y - height), (x, y + height), car.color, 2)
 
-            for yOffset in (-20, 20):
+            for yOffset in (-height, height):
                 for pointA in (backLeft, backRight, frontRight, frontLeft):
                     for pointB in (backLeft, backRight, frontRight, frontLeft):
                         if pointA[0] == pointB[0] and pointA[1] == pointB[1]:
