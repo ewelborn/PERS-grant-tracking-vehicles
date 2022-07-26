@@ -50,7 +50,9 @@ if config.HOMOGRAPHY_INFERENCE == "LOADFILE":
         print("Could not find homography file:",config.HOMOGRAPHY_FILE)
         exit()
 
-    manualHomographyMatrix = np.load(config.HOMOGRAPHY_FILE)
+    homographyFile = np.load(config.HOMOGRAPHY_FILE)
+    manualHomographyMatrix = homographyFile["manualHomographyMatrix"]
+    config.HOMOGRAPHY_SCALING_FACTOR = homographyFile["homographyScalingFactor"]
 
 # If we're saving the homography to a file, make sure it doesn't already exist!
 # (Or if it does, make sure we're allowed to overwrite it)
@@ -221,7 +223,9 @@ while True:
     progress += 1
     ret, frame = cap.read()
 
-    if ret == False:
+    # Keep running until we've processed all of the frames that the user requested,
+    # or we reached the end of the video.
+    if (ret == False) or ((totalFrames >= config.MAX_FRAMES_TO_PROCESS) and config.MAX_FRAMES_TO_PROCESS > -1):
         break
 
     totalFrames += 1
@@ -300,16 +304,16 @@ while True:
 
         # Save the homography matrix if applicable
         if config.HOMOGRAPHY_SAVE_TO_FILE:
-            np.save(config.HOMOGRAPHY_FILE, manualHomographyMatrix)
+            np.savez(config.HOMOGRAPHY_FILE, manualHomographyMatrix=manualHomographyMatrix, homographyScalingFactor=config.HOMOGRAPHY_SCALING_FACTOR)
             print("Homography saved.")
 
-        meters = float(input("Please estimate the length of the car in meters (from headlight to tail-light): "))
+        #meters = float(input("Please estimate the length of the car in meters (from headlight to tail-light): "))
         
-        leftHeadLight = findPointInWarpedImage(manualHomography_points[0], manualHomographyMatrix)
-        leftTailLight = findPointInWarpedImage(manualHomography_points[2], manualHomographyMatrix)
-        manualHomography_pixelsToMeters = math.fabs(leftHeadLight[1] - leftTailLight[1]) / meters
+        #leftHeadLight = findPointInWarpedImage(manualHomography_points[0], manualHomographyMatrix)
+        #leftTailLight = findPointInWarpedImage(manualHomography_points[2], manualHomographyMatrix)
+        #manualHomography_pixelsToMeters = math.fabs(leftHeadLight[1] - leftTailLight[1]) / meters
 
-        print("Estimated pixels-to-meters ratio:",manualHomography_pixelsToMeters)
+        #print("Estimated pixels-to-meters ratio:",manualHomography_pixelsToMeters)
 
     if firstFrame:
         # Make sure the timer is accurate and ensure that detection is done on the very first frame
@@ -702,7 +706,12 @@ while True:
             cv2.rectangle(drawingLayer, (car.boundingBox.getX(), car.boundingBox.getY()), (car.boundingBox.getEndX(), car.boundingBox.getEndY()), car.color, thickness = config.DRAWING_THICKNESS)
         
         if config.DRAW_LABELS:
-            text = "ID: {ID} ; KMH: {KMH:.2f}".format(ID=car.ID,KMH=car.getKMH())
+            # This could be done in a more compact way, but in the interest
+            # of keeping the code readable:
+            text = "ID: {ID} ; KMH: {KMH:.2f}".format(ID=car.ID, KMH=car.getKMH())
+            if config.CONVERT_TO_MPH:
+                text = "ID: {ID} ; MPH: {MPH:.2f}".format(ID=car.ID, MPH=(car.getKMH() * 0.621371))
+                
             fontFace = cv2.FONT_HERSHEY_SIMPLEX
             fontScale = 0.5
             thickness = 2
