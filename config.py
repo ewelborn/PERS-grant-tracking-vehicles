@@ -10,6 +10,14 @@ OVERWRITE_PREVIOUS_RESULT = False
 # Video file to write to (no effect if SAVE_RESULT_AS_VIDEO = False)
 OUTPUT_VIDEO_PATH = "boundingBoxes3D_2.mp4"
 
+# How many frames should the program process? Set this to -1 to keep processing until
+# the end of the video
+MAX_FRAMES_TO_PROCESS = -1
+
+# Should the speeds be converted to miles-per-hour? If false, then the speeds will
+# be kept in kilometers-per-hour
+CONVERT_TO_MPH = True
+
 # What detection model are we using? (YOLO, MASKRCNN)
 DETECTION_MODEL = "MASKRCNN"
 
@@ -95,4 +103,6 @@ VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES = 3
 # By what factor should the homography be scaled? Higher values will be more intensive
 # on the PC, lower values result in lower tracking accuracy.
 # Recommended: 10
+# NOTE: This value is ignored if HOMOGRAPHY_INFERENCE = "loadfile" - the original
+# scaling factor from the saved homography file will be used instead
 HOMOGRAPHY_SCALING_FACTOR = 10
