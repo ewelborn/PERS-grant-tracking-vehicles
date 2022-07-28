@@ -133,6 +133,9 @@ class BoundingBox():
         self.width = int(width)
         self.height = int(height)
 
+    def __str__(self):
+        return "[{x}, {y}, {width}, {height}]".format(x=self.x, y=self.y, width=self.width, height=self.height)
+
     def getX(self):
         return self.x
 
@@ -473,6 +476,11 @@ while True:
                     # Use the tracking model that the user specified in the config settings
                     multiTracker.add(trackingModels.get(config.BOUNDING_BOX_TRACKING_MODEL)(), frame, [x, y, endX - x, endY - y])
 
+            # Last step: update the multitracker with the current frame so that it has context.
+            # This prevents the bug where the first tracking frame after a detection has all
+            # of the vehicles reporting 0 for their initial speed.
+            multiTracker.update(frame)
+
         debugPrint(config.DETECTION_MODEL, "detection is complete")
         if config.HOMOGRAPHY_INFERENCE == "AUTO":
             # Create homographies for the cars
@@ -703,7 +711,7 @@ while True:
                         cv2.line(frame, (pointA[0], pointA[1] + yOffset), (pointB[0], pointB[1] + yOffset), car.color, 2)
 
         if config.DRAW_2D_BOUNDING_BOXES:
-            cv2.rectangle(drawingLayer, (car.boundingBox.getX(), car.boundingBox.getY()), (car.boundingBox.getEndX(), car.boundingBox.getEndY()), car.color, thickness = config.DRAWING_THICKNESS)
+            cv2.rectangle(frame, (car.boundingBox.getX(), car.boundingBox.getY()), (car.boundingBox.getEndX(), car.boundingBox.getEndY()), car.color, thickness = config.DRAWING_THICKNESS)
         
         if config.DRAW_LABELS:
             # This could be done in a more compact way, but in the interest
