@@ -437,7 +437,7 @@ while True:
 
             for i in maxValueIDs:
                 predictedClassID = int(boundingBoxes[0, 0, i, 1])
-                predictedClassLabel = COCOLabels[predictedClassID]
+                predictedClassLabel = COCOLabels[predictedClassID] if predictedClassID < len(COCOLabels) else ""
                 predictionConfidence = boundingBoxes[0, 0, i, 2]
 
                 if predictedClassLabel in config.COCO_LABELS_TO_DETECT:
@@ -645,15 +645,38 @@ while True:
         colorArray = np.array(config.MASKRCNN_DRAW_MASKS_COLOR) / 255
 
         for car in currentCars:
-            # Naive fix for out of bounds errors: just don't draw the mask if it would go out of bounds
-            if (car.boundingBox.getY() + car.mask.shape[0] >= frameHeight) or (car.boundingBox.getX() + car.mask.shape[1] >= frameWidth):
+            # Here's what we have: the bounding box for the car could be slightly offscreen
+            # (i.e., it has a start or end coordinate that is negative, or a start or end coordinate
+            # that is greater than the frame width/height)
+            # We want to be able to fill the entire bounding box with the car's mask (from Mask R-CNN).
+
+            # We first need to convert the mask from grayscale to color
+            carMask = (cv2.cvtColor(car.mask, cv2.COLOR_GRAY2BGR) * colorArray)
+
+            # The car's mask may not be the same size as the bounding box, so we need to resize it.
+            # NOTE: If the bounding box has no area, then we can't resize. Abort mission
+            if car.boundingBox.getArea() == 0:
                 continue
-            # Also, don't draw the mask if we lost the car (if we don't do this, a phantom mask gets
-            # drawn in the upper-left corner of the screen)
-            elif car.boundingBox.getArea() == 0:
-                continue
-            maskRCNNDrawingMask[car.boundingBox.getY():car.boundingBox.getY()+car.mask.shape[0], car.boundingBox.getX():car.boundingBox.getX()+car.mask.shape[1]] = (cv2.cvtColor(car.mask, cv2.COLOR_GRAY2BGR) * colorArray)
-        
+            carMask = cv2.resize(carMask, [car.boundingBox.getWidth(), car.boundingBox.getHeight()])
+
+            # The bounding box may be "spilling" off the edges of the screen in one or more directions.
+            # Calculate the spillage, and then we can slice the mask accordingly later.
+            startXOffset = max(-car.boundingBox.getX(), 0)
+            startYOffset = max(-car.boundingBox.getY(), 0)
+            endXOffset = min(frameWidth - car.boundingBox.getEndX(), 0)
+            endYOffset = min(frameHeight - car.boundingBox.getEndY(), 0)
+
+            print(startXOffset, startYOffset, endXOffset, endYOffset)
+
+            # Now, finally, add the mask to the drawing layer.
+            maskRCNNDrawingMask[
+                car.boundingBox.getY() + startYOffset : car.boundingBox.getEndY() + endYOffset,
+                car.boundingBox.getX() + startXOffset : car.boundingBox.getEndX() + endXOffset
+            ] = carMask[
+                startYOffset : car.boundingBox.getHeight() + endYOffset,
+                startXOffset : car.boundingBox.getWidth() + endXOffset
+            ]
+            
         # Combine the frame containing the masks to the original frame
         frame = cv2.addWeighted(frame, 1 - config.MASKRCNN_DRAW_MASKS_INTENSITY, maskRCNNDrawingMask.astype("uint8"), config.MASKRCNN_DRAW_MASKS_INTENSITY, 0)
 
