@@ -640,8 +640,8 @@ while True:
     drawingLayer = np.zeros_like(frame)
 
     if config.MASKRCNN_DRAW_MASKS:
-        # Create a full frame containing all of the car masks
-        maskRCNNDrawingMask = np.zeros_like(frame)
+        # Create a full BGR frame containing all of the car masks
+        maskRCNNDrawingMask = np.zeros((frameHeight, frameWidth, 3), dtype=np.uint8)
         colorArray = np.array(config.MASKRCNN_DRAW_MASKS_COLOR) / 255
 
         for car in currentCars:
@@ -650,8 +650,19 @@ while True:
             # that is greater than the frame width/height)
             # We want to be able to fill the entire bounding box with the car's mask (from Mask R-CNN).
 
-            # We first need to convert the mask from grayscale to color
+            # We first need to convert the mask from grayscale to BGR
             carMask = (cv2.cvtColor(car.mask, cv2.COLOR_GRAY2BGR) * colorArray)
+            
+            # Make every black pixel transparent 
+            # https://stackoverflow.com/questions/70223829/opencv-how-to-convert-all-black-pixels-to-transparent-and-save-it-to-png-file
+            # Make a True/False mask of pixels whose BGR values sum to more than zero
+            alpha = np.sum(carMask, axis=-1) > 0
+
+            # Convert True/False to 0/255 and change type to "uint8" to match "na"
+            alpha = np.uint8(alpha * 255)
+
+            # Stack new alpha layer with existing image to go from BGR to BGRA, i.e. 3 channels to 4 channels
+            carMask = np.dstack((carMask, alpha))
 
             # The car's mask may not be the same size as the bounding box, so we need to resize it.
             # NOTE: If the bounding box has no area, then we can't resize. Abort mission
@@ -666,17 +677,48 @@ while True:
             endXOffset = min(frameWidth - car.boundingBox.getEndX(), 0)
             endYOffset = min(frameHeight - car.boundingBox.getEndY(), 0)
 
-            print(startXOffset, startYOffset, endXOffset, endYOffset)
+            #print(startXOffset, startYOffset, endXOffset, endYOffset)
 
             # Now, finally, add the mask to the drawing layer.
-            maskRCNNDrawingMask[
-                car.boundingBox.getY() + startYOffset : car.boundingBox.getEndY() + endYOffset,
-                car.boundingBox.getX() + startXOffset : car.boundingBox.getEndX() + endXOffset
-            ] = carMask[
+            #maskRCNNDrawingMask[
+            #    car.boundingBox.getY() + startYOffset : car.boundingBox.getEndY() + endYOffset,
+            #    car.boundingBox.getX() + startXOffset : car.boundingBox.getEndX() + endXOffset
+            #] = carMask[
+            #    startYOffset : car.boundingBox.getHeight() + endYOffset,
+            #    startXOffset : car.boundingBox.getWidth() + endXOffset
+            #]
+            # https://stackoverflow.com/a/71701023
+
+            bg_h, bg_w, bg_channels = maskRCNNDrawingMask.shape
+            fg_h, fg_w, fg_channels = carMask.shape
+
+            foreground = carMask[
                 startYOffset : car.boundingBox.getHeight() + endYOffset,
                 startXOffset : car.boundingBox.getWidth() + endXOffset
             ]
+
+            # separate alpha and color channels from the foreground image
+            foreground_colors = foreground[:, :, :3]
+            alpha_channel = foreground[:, :, 3] / 255  # 0-255 => 0.0-1.0
+
+            # construct an alpha_mask that matches the image shape
+            alpha_mask = np.dstack((alpha_channel, alpha_channel, alpha_channel))
+
+            background_subsection = maskRCNNDrawingMask[
+                car.boundingBox.getY() + startYOffset : car.boundingBox.getEndY() + endYOffset,
+                car.boundingBox.getX() + startXOffset : car.boundingBox.getEndX() + endXOffset
+            ]
+
+            # combine the background with the overlay image weighted by alpha
+            composite = background_subsection * (1 - alpha_mask) + foreground_colors * alpha_mask
+
+            # overwrite the section of the background image that has been updated
+            maskRCNNDrawingMask[
+                car.boundingBox.getY() + startYOffset : car.boundingBox.getEndY() + endYOffset,
+                car.boundingBox.getX() + startXOffset : car.boundingBox.getEndX() + endXOffset
+            ] = composite
             
+
         # Combine the frame containing the masks to the original frame
         frame = cv2.addWeighted(frame, 1 - config.MASKRCNN_DRAW_MASKS_INTENSITY, maskRCNNDrawingMask.astype("uint8"), config.MASKRCNN_DRAW_MASKS_INTENSITY, 0)
 
