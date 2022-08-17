@@ -186,6 +186,7 @@ class Car():
         self.u_screenPoints = []
         self.previousTheta = 0
         self.height = 0
+        self.previousBoundingBoxes = []
 
     def recordSpeed(self, KMH):
         self.recordedKMH.append(KMH)
@@ -195,6 +196,12 @@ class Car():
     def getKMH(self):
         # Return the average of the recorded speeds, or 0 if there are no recorded speeds
         return (sum(self.recordedKMH) / len(self.recordedKMH)) if len(self.recordedKMH) > 0 else 0
+
+    def setBoundingBox(self, boundingBox):
+        self.boundingBox = boundingBox
+        self.previousBoundingBoxes.append(boundingBox)
+        if len(self.previousBoundingBoxes) > 5:
+            self.previousBoundingBoxes.pop(0)
 
 currentCars = []
 oldCars = []
@@ -386,7 +393,7 @@ while True:
                 predictionConfidence = confidencesList[maxValueID]
 
                 car = Car(currentCarID)
-                car.boundingBox = BoundingBox(box[0],box[1],box[2],box[3])
+                car.setBoundingBox(BoundingBox(box[0],box[1],box[2],box[3]))
 
                 # Determine if this car has already been detected, if so, then reuse the old ID
                 # to show that this is not a new car.
@@ -443,7 +450,7 @@ while True:
                 if predictedClassLabel in config.COCO_LABELS_TO_DETECT:
                     car = Car(currentCarID)
                     x, y, endX, endY = (boundingBoxes[0, 0, i, 3:7] * np.array([frameWidth, frameHeight, frameWidth, frameHeight])).astype("int")
-                    car.boundingBox = BoundingBox(x, y, endX - x, endY - y)
+                    car.setBoundingBox(BoundingBox(x, y, endX - x, endY - y))
 
                     # Determine if this car has already been detected, if so, then reuse the old ID
                     # to show that this is not a new car.
@@ -544,8 +551,22 @@ while True:
             #print([car.boundingBox.getX(),car.boundingBox.getY(),car.boundingBox.getWidth(),car.boundingBox.getHeight()],"vs",box)
             
             oldBoundingBox = car.boundingBox
-            car.boundingBox = BoundingBox(box[0], box[1], box[2], box[3])
+            car.setBoundingBox(BoundingBox(box[0], box[1], box[2], box[3]))
             if car.boundingBox.getArea() != 0 and oldBoundingBox is not None:
+                # Check and make sure the car wasn't lost! When cars go off the edge
+                # of the frame, their bounding boxes have a tendency to go wild. If
+                # the bounding box has a sudden jerk of acceleration in several
+                # directions, then that's a sign that we've probably lost the car.
+                positions = [(bb.getCenterX(), bb.getCenterY()) for bb in car.previousBoundingBoxes]
+                velocities = [(p[1][0] - p[0][0], p[1][1] - p[0][1]) for p in zip(positions, positions[1:])]
+                accelerations = [(p[1][0] - p[0][0], p[1][1] - p[0][1]) for p in zip(velocities, velocities[1:])]
+                normalizedAccelerations = [(p[0]**2 + p[1]**2) ** 0.5 for p in accelerations]
+                #print((str(max(normalizedAccelerations)) + "\n") if len(normalizedAccelerations) > 0 else "", end="")
+
+                if len(normalizedAccelerations) > 0 and max(normalizedAccelerations) > 50:
+                    car.setBoundingBox(BoundingBox(0, 0, 0, 0))
+                    continue
+
                 homography = manualHomographyMatrix if config.HOMOGRAPHY_INFERENCE != "AUTO" else car.homographyMatrix
 
                 # Estimate the car's speed based on the movement of
