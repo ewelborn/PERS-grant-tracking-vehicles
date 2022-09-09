@@ -42,6 +42,14 @@ if not (config.HOMOGRAPHY_INFERENCE in ["MANUAL", "AUTO", "LOADFILE"]):
     print(config.HOMOGRAPHY_INFERENCE, "is not a valid inference setting")
     print("Please try \"MANUAL\", \"AUTO\", or \"LOADFILE\"")
     exit()
+elif config.HOMOGRAPHY_INFERENCE == "MANUAL" and config.TERMINAL_ONLY:
+    print("Manual homography inference is not possible in terminal-only mode.")
+    print("Please try one of the following options and restart the program:")
+    print("\t- Set TERMINAL_ONLY to False")
+    print("\t- Set HOMOGRAPHY_INFERENCE to LOADFILE")
+elif config.HOMOGRAPHY_INFERENCE == "AUTO":
+    print("Auto homography inference is not supported at this time.")
+    print("Please set HOMOGRAPHY_INFERENCE to MANUAL or LOADFILE")
 
 # If we're loading the homography from a file, ensure that it's loading correctly
 manualHomographyMatrix = None
@@ -104,6 +112,7 @@ elif config.DETECTION_MODEL == "MASKRCNN":
 
 # Set up the video capture
 cap = cv2.VideoCapture(config.VIDEO_PATH)
+totalFramesInVideo = cap.get(cv2.CAP_PROP_FRAME_COUNT)
 
 # Variables and classes for later
 COCOLabels = ["person","bicycle","car","motorcycle","airplane","bus","train","truck","boat","trafficlight","firehydrant","stopsign","parkingmeter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","backpack","umbrella","handbag","tie","suitcase","frisbee","skis","snowboard","sportsball","kite","baseballbat","baseballglove","skateboard","surfboard","tennisracket","bottle","wineglass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hotdog","pizza","donut","cake","chair","sofa","pottedplant","bed","diningtable","toilet","tvmonitor","laptop","mouse","remote","keyboard","cellphone","microwave","oven","toaster","sink","refrigerator","book","clock","vase","scissors","teddybear","hairdrier","toothbrush"]
@@ -184,24 +193,42 @@ class Car():
         self.recordedKMH = []
         self.screenPoints = []
         self.u_screenPoints = []
-        self.previousTheta = 0
+        self.recordedTheta = []
         self.height = 0
         self.previousBoundingBoxes = []
 
     def recordSpeed(self, KMH):
         self.recordedKMH.append(KMH)
-        if len(self.recordedKMH) > config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES:
+        if len(self.recordedKMH) > 300:#config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES:
             self.recordedKMH.pop(0)
 
-    def getKMH(self):
+    def getKMH(self, frames = config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES):
         # Return the average of the recorded speeds, or 0 if there are no recorded speeds
-        return (sum(self.recordedKMH) / len(self.recordedKMH)) if len(self.recordedKMH) > 0 else 0
+        # Only considers the last few recorded frames - by default, this is VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES     
+        recordedKMH_smoothingFrames = self.recordedKMH[-frames:]
+        return (sum(recordedKMH_smoothingFrames) / len(recordedKMH_smoothingFrames)) if len(recordedKMH_smoothingFrames) > 0 else 0
 
     def setBoundingBox(self, boundingBox):
         self.boundingBox = boundingBox
         self.previousBoundingBoxes.append(boundingBox)
         if len(self.previousBoundingBoxes) > 5:
             self.previousBoundingBoxes.pop(0)
+
+    def recordTheta(self, theta):
+        self.recordedTheta.append(theta)
+        if len(self.recordedTheta) > config.VEHICLE_3D_BOUNDING_BOX_ESTIMATION_SMOOTHING_FRAMES:
+            self.recordedTheta.pop(0)
+
+    def getTheta(self):
+        # Use vector addition to determine the average angle
+        dx = 0
+        dy = 0
+
+        for theta in self.recordedTheta:
+            dx += math.cos(theta)
+            dy += math.sin(theta)
+
+        return math.atan2(dy, dx)
 
 currentCars = []
 oldCars = []
@@ -229,6 +256,9 @@ firstFrame = True
 lastGrayFrame = None
 detectedThisFrame = False
 totalFrames = 0
+currentTime = time.time()
+lastTime = currentTime
+startTime = currentTime
 while True:
     progress += 1
     ret, frame = cap.read()
@@ -412,6 +442,8 @@ while True:
                     car.ID = bestMatch.ID
                     car.color = bestMatch.color
                     car.recordedKMH = bestMatch.recordedKMH
+                    car.screenPoints = bestMatch.screenPoints
+                    car.height = bestMatch.height
 
                 currentCars.append(car)
 
@@ -470,6 +502,7 @@ while True:
                         car.color = bestMatch.color
                         car.recordedKMH = bestMatch.recordedKMH
                         car.screenPoints = bestMatch.screenPoints
+                        car.height = bestMatch.height
 
                     currentCars.append(car)
 
@@ -578,13 +611,8 @@ while True:
 
                 # Generate the 3D bounding box
                 # Find the angle of motion
-                thetaInRadians = math.atan2(dy, dx) + (math.pi / 2)
-                # If we don't have any information to adjust the angle of motion
-                # (the car didn't move), then use the last angle of motion instead
-                if dx == 0 and dy == 0:
-                    thetaInRadians = car.previousTheta
-                else:
-                    car.previousTheta = thetaInRadians
+                car.recordTheta(math.atan2(dy, dx) + (math.pi / 2))
+                thetaInRadians = car.getTheta()
                 #print(dx,dy,thetaInRadians)
                 carReferencePoints = np.array(MEAN_SEDAN_BOUNDING_BOX)
 
@@ -617,7 +645,8 @@ while True:
 
                 carReferencePoints = carReferencePoints * scale
 
-                car.height = int(referenceHeight * 0.6)
+                #car.height = int(referenceHeight * 0.6)
+                car.height = car.boundingBox.getHeight()
 
                 # Translate the reference points so that the center of the
                 # rectangle is 0,0
@@ -769,7 +798,8 @@ while True:
                 cv2.circle(warpedFrame, warpedPoint, manualHomography_pointSize, color, -1)
                 cv2.circle(warpedFrame, warpedPoint, int(manualHomography_pointSize/2), [c/3 for c in color], -1)
 
-        cv2.imshow("Vehicle Tracking (Bird's Eye)",warpedFrame)
+        if not config.TERMINAL_ONLY:
+            cv2.imshow("Vehicle Tracking (Bird's Eye)",warpedFrame)
 
     # Draw the labels last, so that they're on top of everything else in the image
     for car in currentCars:
@@ -785,11 +815,11 @@ while True:
             for point in car.screenPoints:
                 x = point[0]# + car.boundingBox.getX()
                 y = point[1]# + car.boundingBox.getY()
-                cv2.circle(frame, (x, y - height), int(manualHomography_pointSize/2), car.color, -1)
-                cv2.circle(frame, (x, y + height), int(manualHomography_pointSize/2), car.color, -1)
-                cv2.line(frame, (x, y - height), (x, y + height), car.color, 2)
+                cv2.circle(frame, (x, y - height//2), int(manualHomography_pointSize/2), car.color, -1)
+                cv2.circle(frame, (x, y + height//2), int(manualHomography_pointSize/2), car.color, -1)
+                cv2.line(frame, (x, y - height//2), (x, y + height//2), car.color, 2)
 
-            for yOffset in (-height, height):
+            for yOffset in (-height//2, height//2):
                 for pointA in (backLeft, backRight, frontRight, frontLeft):
                     for pointB in (backLeft, backRight, frontRight, frontLeft):
                         if pointA[0] == pointB[0] and pointA[1] == pointB[1]:
@@ -821,13 +851,20 @@ while True:
     if config.SAVE_RESULT_AS_VIDEO:
         out.write(frame)
 
-    cv2.imshow("Vehicle Tracking", frame)
-    inputKey = cv2.waitKey(int((1 / config.FPS) * 1000)) & 0xFF
-    if inputKey == 27 or inputKey == ord("q") or inputKey == ord("Q"): # Esc or Q to quit
-        break
+    if not config.TERMINAL_ONLY:
+        cv2.imshow("Vehicle Tracking", frame)
+        inputKey = cv2.waitKey(int((1 / config.FPS) * 1000)) & 0xFF
+        if inputKey == 27 or inputKey == ord("q") or inputKey == ord("Q"): # Esc or Q to quit
+            break
 
     # Save the current gray frame for next iteration
     lastGrayFrame = grayFrame
+
+    lastTime = currentTime
+    currentTime = time.time()
+
+    framesLeft = config.MAX_FRAMES_TO_PROCESS if config.MAX_FRAMES_TO_PROCESS >= 0 else totalFramesInVideo
+    print("{}/{} ({:.1f}%)\tframe time: {:.2f} seconds\ttotal time: {:.2f} seconds".format(totalFrames, int(framesLeft), (totalFrames/framesLeft) * 100, currentTime-lastTime, currentTime-startTime))
 
 cap.release()
 if config.SAVE_RESULT_AS_VIDEO:
