@@ -28,6 +28,7 @@ if hasattr(cv2, "legacy") == False:
     print("cv2.legacy is missing! Please install (or enable) an OpenCV version that has this package.")
     print("The legacy package is required so that the multitracker object can be used.")
     print("Recommended pip package is 'opencv-contrib-python' (4.6.0.66)")
+    exit()
 
 # Make sure the detection model is valid
 config.DETECTION_MODEL = config.DETECTION_MODEL.upper()
