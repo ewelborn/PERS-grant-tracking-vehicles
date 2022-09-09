@@ -1,3 +1,11 @@
+# If true, then no windows will be drawn to the screen - all progress will be shared
+# through the terminal window only.
+# NOTE: This setting is meant for rendering videos in the background where progress
+#       being displayed in real-time is not necessary. This setting is especially
+#       useful on terminal-only environments where OpenCV may not be able to open
+#       any windows.
+TERMINAL_ONLY = False
+
 # Video file to read
 VIDEO_PATH = "\\Datasets\\cam_10.mp4"
 #VIDEO_PATH = "thermalSequence4.mp4"
@@ -8,7 +16,7 @@ SAVE_RESULT_AS_VIDEO = False
 OVERWRITE_PREVIOUS_RESULT = False
 
 # Video file to write to (no effect if SAVE_RESULT_AS_VIDEO = False)
-OUTPUT_VIDEO_PATH = "boundingBoxes3D_2.mp4"
+OUTPUT_VIDEO_PATH = "videos/final/cam_10_CSRT_v3.mp4"
 
 # How many frames should the program process? Set this to -1 to keep processing until
 # the end of the video
@@ -16,7 +24,7 @@ MAX_FRAMES_TO_PROCESS = -1
 
 # Should the speeds be converted to miles-per-hour? If false, then the speeds will
 # be kept in kilometers-per-hour
-CONVERT_TO_MPH = True
+CONVERT_TO_MPH = False
 
 # What detection model are we using? (YOLO, MASKRCNN)
 DETECTION_MODEL = "MASKRCNN"
@@ -29,7 +37,7 @@ COCO_LABELS_TO_DETECT = ["car", "truck"]
 DETECTION_MINIMUM_CONFIDENCE = 0.3
 
 # How many frames should we wait until the detection model is allowed to detect cars again?
-DETECTION_REFRESH_RATE = 10
+DETECTION_REFRESH_RATE = 8
 
 # Non-maximum suppression is for reducing the likelihood of multiple detections for the same vehicle.
 # How much overlap is allowed between two competing detections? (0 is none, 1 is complete overlap)
@@ -48,18 +56,18 @@ MASKRCNN_PIXEL_SEGMENTATION_THRESHOLD = 0.2
 
 # Should the detected masks be drawn? If so, what intensity and color should they be drawn with?
 # (No effect if DETECTION_MODEL != "maskRCNN")
-MASKRCNN_DRAW_MASKS = False
+MASKRCNN_DRAW_MASKS = True
 MASKRCNN_DRAW_MASKS_INTENSITY = 0.5
 # Color is represented in BGR format
 MASKRCNN_DRAW_MASKS_COLOR = (255,0,0)
 
 # What model should we use to track bounding boxes in our model? (Case insensitive)
-# Options: BOOSTING, MIL, KCF (Recommended), TLD, MEDIANFLOW, GOTURN, MOSSE, CSRT
-BOUNDING_BOX_TRACKING_MODEL = "KCF"
+# Options: BOOSTING, MIL, KCF, TLD, MEDIANFLOW, GOTURN, MOSSE, CSRT (Recommended)
+BOUNDING_BOX_TRACKING_MODEL = "CSRT"
 
 # How much overlap is required between the bounding box of a car detected last round versus a car
 # detected this round to prove that these two detections are the same car?
-MINIMUM_BB_OVERLAP = 0.20
+MINIMUM_BB_OVERLAP = 0.35
 
 # How fast is the video in frames per second?
 FPS = 10
@@ -77,7 +85,7 @@ HOMOGRAPHY_INFERENCE = "loadfile"
 # If HOMOGRAPHY_INFERENCE is MANUAL and HOMOGRAPHY_SAVE_TO_FILE is true, then this is
 # the file we save the homography to.
 # If HOMOGRAPHY_INFERENCE is LOADFILE, then this is the file we load the homography from.
-HOMOGRAPHY_FILE = "cam_10.npy"
+HOMOGRAPHY_FILE = "homography/cam_10.npz"
 HOMOGRAPHY_SAVE_TO_FILE = True
 
 # Can we overwrite a pre-existing homography?
@@ -87,8 +95,8 @@ HOMOGRAPHY_SAVE_TO_FILE_OVERWRITE = False
 DRAW_MANUAL_HOMOGRAPHY = True
 
 # Should the bounding boxes and labels for the detected cars be drawn?
-DRAW_2D_BOUNDING_BOXES = False
-DRAW_3D_BOUNDING_BOXES = True
+DRAW_2D_BOUNDING_BOXES = True
+DRAW_3D_BOUNDING_BOXES = False
 DRAW_LABELS = True
 
 # How thick should the detection rectangles be? (In pixels)
@@ -100,9 +108,23 @@ DRAWING_THICKNESS = 3
 # Set this to 1 to disable smoothing
 VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES = 3
 
+# How many frames of information should we use to compute the vehicle's 3D bounding box?
+# Less frames = faster response time to sudden change in vehicle direction
+# More frames = smoother, less jittery estimation of bounding box
+# Set this to 1 to disable smoothing
+VEHICLE_3D_BOUNDING_BOX_ESTIMATION_SMOOTHING_FRAMES = 5
+
 # By what factor should the homography be scaled? Higher values will be more intensive
 # on the PC, lower values result in lower tracking accuracy.
 # Recommended: 10
 # NOTE: This value is ignored if HOMOGRAPHY_INFERENCE = "loadfile" - the original
 # scaling factor from the saved homography file will be used instead
-HOMOGRAPHY_SCALING_FACTOR = 10
+HOMOGRAPHY_SCALING_FACTOR = 16
+
+# At what speed threshold (in KMH or MPH based on the value of CONVERT_TO_MPH) should
+# the vehicles be under for the algorithm to say that they're parked?
+PARKED_VEHICLE_SPEED_THRESHOLD = 10
+
+# For how many seconds does the vehicle need to stay under this threshold in order
+# for the algorithm to flag it as parked?
+PARKED_VEHICLE_TIME_THRESHOLD = 3
