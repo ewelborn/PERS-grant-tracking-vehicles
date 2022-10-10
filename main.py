@@ -205,7 +205,14 @@ class Car():
 
     def getKMH(self, frames = config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES):
         # Return the average of the recorded speeds, or 0 if there are no recorded speeds
-        # Only considers the last few recorded frames - by default, this is VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES     
+        # Only considers the last few recorded frames - by default, this is VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES
+         
+        # If the vehicle is parked, then just return 0
+        recordedKMH_parkingFrames = self.recordedKMH[-config.PARKED_VEHICLE_TIME_THRESHOLD * int(config.FPS):]
+        if (max(recordedKMH_parkingFrames) if len(recordedKMH_parkingFrames) > 0 else 0) <= config.PARKED_VEHICLE_SPEED_THRESHOLD:
+            #print(self.ID,"is parked!")
+            return 0
+
         recordedKMH_smoothingFrames = self.recordedKMH[-frames:]
         return (sum(recordedKMH_smoothingFrames) / len(recordedKMH_smoothingFrames)) if len(recordedKMH_smoothingFrames) > 0 else 0
 
@@ -870,4 +877,7 @@ while True:
 cap.release()
 if config.SAVE_RESULT_AS_VIDEO:
     out.release()
+else:
+    # TODO: Add code to ask user if they want to save video anyways
+    pass
 cv2.destroyAllWindows()
