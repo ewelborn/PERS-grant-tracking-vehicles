@@ -98,6 +98,10 @@ if config.SAVE_RESULT_AS_VIDEO and config.OVERWRITE_PREVIOUS_RESULT == False:
         print("Output video already exists at the following path:", str(config.OUTPUT_VIDEO_PATH))
         exit()
 
+# Make sure the window is resizable
+if config.RESIZABLE_WINDOW:
+    cv2.namedWindow("Vehicle Tracking", cv2.WINDOW_NORMAL)
+
 # Prepare our detection model and get it loaded in memory
 # Give some dummy values just to make sure the variable is in scope - if these
 # variables are necessary, then the detection model will fill them in in a minute
@@ -279,6 +283,9 @@ while True:
     totalFrames += 1
 
     detectedThisFrame = False
+
+    if config.RESIZE_INPUT_VIDEO:
+        frame = cv2.resize(frame, config.RESIZE_INPUT_VIDEO_TARGET_RESOLUTION)
 
     frameWidth = frame.shape[1]
     frameHeight = frame.shape[0]
