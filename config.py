@@ -15,6 +15,11 @@ VIDEO_PATH = "\\Datasets\\cam_10.mp4"
 SAVE_RESULT_AS_VIDEO = False
 OVERWRITE_PREVIOUS_RESULT = False
 
+# Should the input video be resized? If so, what's the target resolution (width, height)?
+# NOTE: This will also affect the resolution of the output video
+RESIZE_INPUT_VIDEO = True
+RESIZE_INPUT_VIDEO_TARGET_RESOLUTION = (1920, 1080)
+
 # Video file to write to (no effect if SAVE_RESULT_AS_VIDEO = False)
 OUTPUT_VIDEO_PATH = "videos/final/cam_10_CSRT_v3.mp4"
 
@@ -128,3 +133,7 @@ PARKED_VEHICLE_SPEED_THRESHOLD = 10
 # For how many seconds does the vehicle need to stay under this threshold in order
 # for the algorithm to flag it as parked?
 PARKED_VEHICLE_TIME_THRESHOLD = 3
+
+# Should the window be resizable? If it is, then the results shown on screen
+# will not be pixel-accurate - but, the results can be scaled better to your display
+RESIZABLE_WINDOW = False
