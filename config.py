@@ -7,25 +7,27 @@
 TERMINAL_ONLY = False
 
 # Video file to read
-VIDEO_PATH = "\\Datasets\\cam_10.mp4"
-#VIDEO_PATH = "thermalSequence4.mp4"
+VIDEO_PATH = "east10m.mp4"
 
 # Do you want the results stored to your computer as a video file? 
 # Is overwriting a previous video file okay?
-SAVE_RESULT_AS_VIDEO = False
-OVERWRITE_PREVIOUS_RESULT = False
+SAVE_RESULT_AS_VIDEO = True
+OVERWRITE_PREVIOUS_RESULT = True
 
 # Should the input video be resized? If so, what's the target resolution (width, height)?
 # NOTE: This will also affect the resolution of the output video
 RESIZE_INPUT_VIDEO = True
-RESIZE_INPUT_VIDEO_TARGET_RESOLUTION = (1920, 1080)
+RESIZE_INPUT_VIDEO_TARGET_RESOLUTION = (1280, 720)
+
+# How many processes/threads are allowed to run at a time?
+MULTITHREADING_PROCESSES = 2
 
 # Video file to write to (no effect if SAVE_RESULT_AS_VIDEO = False)
-OUTPUT_VIDEO_PATH = "videos/final/cam_10_CSRT_v3.mp4"
+OUTPUT_VIDEO_PATH = "videos/east10m.mp4"
 
 # How many frames should the program process? Set this to -1 to keep processing until
 # the end of the video
-MAX_FRAMES_TO_PROCESS = -1
+MAX_FRAMES_TO_PROCESS = 35
 
 # Should the speeds be converted to miles-per-hour? If false, then the speeds will
 # be kept in kilometers-per-hour
@@ -39,18 +41,18 @@ DETECTION_MODEL = "MASKRCNN"
 COCO_LABELS_TO_DETECT = ["car", "truck"]
 
 # How confident should our detection model be when detecting vehicles? (0 is no confidence, 1 is completely confident)
-DETECTION_MINIMUM_CONFIDENCE = 0.3
+DETECTION_MINIMUM_CONFIDENCE = 0.01
 
 # How many frames should we wait until the detection model is allowed to detect cars again?
-DETECTION_REFRESH_RATE = 8
+DETECTION_REFRESH_RATE = 10#15
 
 # Non-maximum suppression is for reducing the likelihood of multiple detections for the same vehicle.
 # How much overlap is allowed between two competing detections? (0 is none, 1 is complete overlap)
 NMS_THRESHOLD = 0.7
 
 # Where are the YOLOv4 configuration and weight files contained? (No effect if DETECTION_MODEL != "YOLO")
-YOLO_CONFIG_PATH = "yolov4.cfg"
-YOLO_WEIGHTS_PATH = "yolov4.weights"
+YOLO_CONFIG_PATH = "yolov7.conv.132"
+YOLO_WEIGHTS_PATH = "yolov7.weights"
 
 # Where are the Mask-RCNN configuration and weight files contained? (No effect if DETECTION_MODEL != "maskRCNN")
 MASKRCNN_CONFIG_PATH = "mask_rcnn_inception_v2_coco_2018_01_28.pbtxt"
@@ -67,7 +69,9 @@ MASKRCNN_DRAW_MASKS_INTENSITY = 0.5
 MASKRCNN_DRAW_MASKS_COLOR = (255,0,0)
 
 # What model should we use to track bounding boxes in our model? (Case insensitive)
-# Options: BOOSTING, MIL, KCF, TLD, MEDIANFLOW, GOTURN, MOSSE, CSRT (Recommended)
+# Options: BOOSTING, MIL, KCF, TLD, MEDIANFLOW, GOTURN, MOSSE, CSRT (Recommended), GOTURN (Recommended)
+# NOTE: GOTURN will use a seperate tracking system - all other options use CV2's legacy MultiTracker system
+# NOTE: GOTURN *only* works with GPU enabled
 BOUNDING_BOX_TRACKING_MODEL = "CSRT"
 
 # How much overlap is required between the bounding box of a car detected last round versus a car
@@ -75,10 +79,10 @@ BOUNDING_BOX_TRACKING_MODEL = "CSRT"
 MINIMUM_BB_OVERLAP = 0.35
 
 # How fast is the video in frames per second?
-FPS = 10
+FPS = 30
 
 # Should additional information about the algorithm be printed to the console?
-DEBUG = True
+DEBUG = False
 
 # Should the time code be printed along with the debug information?
 DEBUG_TIMECODE = True
@@ -90,11 +94,11 @@ HOMOGRAPHY_INFERENCE = "loadfile"
 # If HOMOGRAPHY_INFERENCE is MANUAL and HOMOGRAPHY_SAVE_TO_FILE is true, then this is
 # the file we save the homography to.
 # If HOMOGRAPHY_INFERENCE is LOADFILE, then this is the file we load the homography from.
-HOMOGRAPHY_FILE = "homography/cam_10.npz"
+HOMOGRAPHY_FILE = "homography/east10m_2.npz"
 HOMOGRAPHY_SAVE_TO_FILE = True
 
 # Can we overwrite a pre-existing homography?
-HOMOGRAPHY_SAVE_TO_FILE_OVERWRITE = False
+HOMOGRAPHY_SAVE_TO_FILE_OVERWRITE = True
 
 # Should we draw what the warped image looks like? Has no effect if HOMOGRAPHY_INFERENCE is AUTO
 DRAW_MANUAL_HOMOGRAPHY = True
@@ -104,6 +108,9 @@ DRAW_2D_BOUNDING_BOXES = True
 DRAW_3D_BOUNDING_BOXES = False
 DRAW_LABELS = True
 
+# How many times per second should the label information for each vehicle be updated?
+DRAW_LABEL_UPDATE_FREQUENCY = 1
+
 # How thick should the detection rectangles be? (In pixels)
 DRAWING_THICKNESS = 3
 
@@ -111,7 +118,7 @@ DRAWING_THICKNESS = 3
 # Less frames = faster response time to sudden change in vehicle speed
 # More frames = smoother, less jittery speed estimation of vehicle
 # Set this to 1 to disable smoothing
-VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES = 3
+VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES = 4
 
 # How many frames of information should we use to compute the vehicle's 3D bounding box?
 # Less frames = faster response time to sudden change in vehicle direction
@@ -128,11 +135,11 @@ HOMOGRAPHY_SCALING_FACTOR = 16
 
 # At what speed threshold (in KMH or MPH based on the value of CONVERT_TO_MPH) should
 # the vehicles be under for the algorithm to say that they're parked?
-PARKED_VEHICLE_SPEED_THRESHOLD = 10
+PARKED_VEHICLE_SPEED_THRESHOLD = 15
 
 # For how many seconds does the vehicle need to stay under this threshold in order
 # for the algorithm to flag it as parked?
-PARKED_VEHICLE_TIME_THRESHOLD = 3
+PARKED_VEHICLE_TIME_THRESHOLD = 2
 
 # Should the window be resizable? If it is, then the results shown on screen
 # will not be pixel-accurate - but, the results can be scaled better to your display
