@@ -7,23 +7,29 @@
 TERMINAL_ONLY = False
 
 # Video file to read
-VIDEO_PATH = "east10m.mp4"
+VIDEO_PATH = "C:\\Users\\ewelborn\\OneDrive - tarleton.edu (NTNET)\\Research\\Misc Drone Data\\10-10\\west10m.mp4"
+#VIDEO_PATH = "thermalSequence4.mp4"
 
 # Do you want the results stored to your computer as a video file? 
 # Is overwriting a previous video file okay?
 SAVE_RESULT_AS_VIDEO = True
 OVERWRITE_PREVIOUS_RESULT = True
+SAVE_HOMOGRAPHY_AS_VIDEO = True
 
 # Should the input video be resized? If so, what's the target resolution (width, height)?
 # NOTE: This will also affect the resolution of the output video
 RESIZE_INPUT_VIDEO = True
-RESIZE_INPUT_VIDEO_TARGET_RESOLUTION = (1280, 720)
+RESIZE_INPUT_VIDEO_TARGET_RESOLUTION = (1920, 1080)
 
 # How many processes/threads are allowed to run at a time?
 MULTITHREADING_PROCESSES = 2
 
+# Should the GPU be used for processing?
+GPU_ENABLED = True
+
 # Video file to write to (no effect if SAVE_RESULT_AS_VIDEO = False)
-OUTPUT_VIDEO_PATH = "videos/east10m.mp4"
+OUTPUT_VIDEO_PATH = "videos/west10m.mp4"
+OUTPUT_HOMOGRAPHY_VIDEO_PATH = "videos/west10m_hom.mp4"
 
 # How many frames should the program process? Set this to -1 to keep processing until
 # the end of the video
@@ -89,12 +95,12 @@ DEBUG_TIMECODE = True
 
 # How should the computer determine the homography for tracking vehicles?
 # Options: AUTO, MANUAL, LOADFILE
-HOMOGRAPHY_INFERENCE = "loadfile"
+HOMOGRAPHY_INFERENCE = "manual"
 
 # If HOMOGRAPHY_INFERENCE is MANUAL and HOMOGRAPHY_SAVE_TO_FILE is true, then this is
 # the file we save the homography to.
 # If HOMOGRAPHY_INFERENCE is LOADFILE, then this is the file we load the homography from.
-HOMOGRAPHY_FILE = "homography/east10m_2.npz"
+HOMOGRAPHY_FILE = "homography/west10m.npz"
 HOMOGRAPHY_SAVE_TO_FILE = True
 
 # Can we overwrite a pre-existing homography?
@@ -107,6 +113,8 @@ DRAW_MANUAL_HOMOGRAPHY = True
 DRAW_2D_BOUNDING_BOXES = True
 DRAW_3D_BOUNDING_BOXES = False
 DRAW_LABELS = True
+DRAW_ANGLE_OF_MOTION = False
+DRAW_FRAME_COUNT = True
 
 # How many times per second should the label information for each vehicle be updated?
 DRAW_LABEL_UPDATE_FREQUENCY = 1

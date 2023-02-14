@@ -11,6 +11,7 @@ class Car():
         self.ID = ID
 
         self.boundingBoxHistory = []
+        self.maskHistory = []
         self.KMHHistory = []
 
         # For stitching
@@ -37,3 +38,15 @@ class Car():
 
     def getKMHHistory(self):
         return self.KMHHistory
+
+    def recordMask(self, mask):
+        self.maskHistory.append(mask)
+
+    def replaceMask(self, mask):
+        self.maskHistory[-1] = mask
+
+    def getMask(self):
+        return self.maskHistory[-1]
+
+    def getMaskHistory(self):
+        return self.maskHistory

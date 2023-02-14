@@ -54,8 +54,13 @@ def stitchTrackedVehicles(trackedVehiclesList):
                 for i in range(1, len(bbHistory)):
                     bestMatch.recordBoundingBox(bbHistory[i])
 
-                if len(bestMatch.getBoundingBoxHistory()) == 14:
-                    print(len(bbHistory))
+                maskHistory = vehicle.getMaskHistory()
+                bestMatch.replaceMask(maskHistory[0])
+                for i in range(1, len(maskHistory)):
+                    bestMatch.recordMask(maskHistory[i])
+
+                #if len(bestMatch.getBoundingBoxHistory()) == 14:
+                #    print(len(bbHistory))
 
                 # Flag the vehicle so that the algorithm is aware it's still actively tracked
                 bestMatch.lastFrame = None

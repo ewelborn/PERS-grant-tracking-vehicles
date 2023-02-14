@@ -4,6 +4,7 @@ from copy import deepcopy
 import config
 from car import Car
 from boundingBox import BoundingBox
+from Mask import Mask
 
 # Takes in point p in the form of (x, y) and matrix is a 3x3 homography matrix
 # https://stackoverflow.com/questions/57399915/how-do-i-determine-the-locations-of-the-points-after-perspective-transform-in-t
@@ -72,7 +73,15 @@ class MultiTrackerWrapper():
 
                     if len(normalizedAccelerations) > 0 and max(normalizedAccelerations) > 50:
                         car.recordBoundingBox(BoundingBox(0, 0, 0, 0))
+                        car.recordMask(Mask(car.getMask().getOriginalMask(), None, True))
                         continue
+
+                    scaledMask = cv2.resize(car.getMask().getOriginalMask(), [newBoundingBox.getWidth(), newBoundingBox.getHeight()])
+                    car.recordMask(Mask(car.getMask().getOriginalMask(), scaledMask, True))
+                else:
+                    # It doesn't matter what mask we record here - it shouldn't be read anyways,
+                    # as the bounding box does not exist (area = 0)
+                    car.recordMask(Mask(car.getMask().getOriginalMask(), car.getMask().getOriginalMask(), True))
 
                 car.recordBoundingBox(newBoundingBox)
 

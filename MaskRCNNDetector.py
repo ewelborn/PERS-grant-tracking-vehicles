@@ -4,12 +4,18 @@ import numpy as np
 import config
 from car import Car
 from boundingBox import BoundingBox
+from Mask import Mask
+
+colorArray = np.array(config.MASKRCNN_DRAW_MASKS_COLOR) / 255
 
 class MaskRCNNDetector():
     model = None
 
     def __init__(self):
         self.model = cv2.dnn.readNetFromTensorflow(config.MASKRCNN_WEIGHTS_PATH, config.MASKRCNN_CONFIG_PATH)
+        if config.GPU_ENABLED:
+            self.model.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+            self.model.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
     '''
     todo
@@ -49,12 +55,16 @@ class MaskRCNNDetector():
 
                 currentCarID += 1
 
-                currentCars.append(car)
-
                 # Find the pixel mask of the car
                 mask = masks[i, predictedClassID]
                 mask = cv2.resize(mask, (car.getBoundingBox().getWidth(), car.getBoundingBox().getHeight()), interpolation=cv2.INTER_CUBIC)
                 mask = (mask > config.MASKRCNN_PIXEL_SEGMENTATION_THRESHOLD).astype("uint8") * 255
-                car.mask = mask
+                #car.mask = mask
+
+                scaledMask = scaledMask = cv2.resize(mask, [endX - x, endY - y]) if (endX - x) != 0 and (endY - y) != 0 else None
+                    
+                car.recordMask(Mask(mask, scaledMask, False))
+
+                currentCars.append(car)
 
         return currentCars
