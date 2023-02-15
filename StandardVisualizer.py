@@ -231,8 +231,9 @@ class StandardVisualizer():
                         text = "ID: {ID} ; *UNKNOWN*".format(ID=vehicle.ID)
                     else:
                         # Vehicle is moving
-                        # This could be done in a more compact way, but in the interest
-                        # of keeping the code readable:
+
+                        kmh = vehicle.getKMHHistory()[math.floor(j / 10) * 10]
+
                         text = "ID: {ID} ; KMH: {KMH:.2f}".format(ID=vehicle.ID, KMH=kmh)
                         if config.CONVERT_TO_MPH:
                             text = "ID: {ID} ; MPH: {MPH:.2f}".format(ID=vehicle.ID, MPH=(kmh * 0.621371))

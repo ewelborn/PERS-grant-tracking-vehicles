@@ -324,16 +324,18 @@ if __name__ == "__main__":
                 # NOTE: Replace magic number with a config value
                 pastBB = bbHistory[max(i - 6, 0)]
                 futureBB = bbHistory[min(i + 6, len(bbHistory) - 1)]
-                dx = pastBB.getCenterX() - futureBB.getCenterX()
-                dy = pastBB.getEndY() - futureBB.getEndY()
+                dx = futureBB.getCenterX() - pastBB.getCenterX()
+                dy = futureBB.getEndY() - pastBB.getEndY()
 
                 totalMovement = ((dx ** 2) + (dy ** 2)) ** 0.5
 
                 angleOfMotion = math.atan2(dy, dx)
 
+                bb = bbHistory[i]
+
                 # Only perform estimation on moving vehicles... If the vehicle is standing still,
                 #   then ignore it. The angle of motion will be erroneous.
-                if totalMovement <= 15:
+                if totalMovement <= 50 or bb.getArea() < 100 * 100:
                     continue
 
                 # If the vehicle is moving horizontally or vertically in the frame, then we can simply
@@ -349,8 +351,6 @@ if __name__ == "__main__":
                     math.isclose(angleOfMotion, -math.pi, abs_tol=thresholdInRadians)
                 ):
                     # Going horizontally
-                
-                    bb = bbHistory[i]
                     point1 = findPointInWarpedImage((bb.getX(), bb.getY()), homography)
                     point2 = findPointInWarpedImage((bb.getEndX(), bb.getY()), homography)
                     vehicleLength = ((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2) ** 0.5
@@ -364,8 +364,6 @@ if __name__ == "__main__":
                     math.isclose(angleOfMotion, -math.pi / 2, abs_tol=thresholdInRadians)
                 ):
                     # Going vertically
-                
-                    bb = bbHistory[i]
                     point1 = findPointInWarpedImage((bb.getX(), bb.getEndY()), homography)
                     point2 = findPointInWarpedImage((bb.getEndX(), bb.getEndY()), homography)
                     vehicleWidth = ((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2) ** 0.5
@@ -376,14 +374,29 @@ if __name__ == "__main__":
 
                 else:
                     # Going diagonally-ish
-
                     indexArray = np.indices(mask.getOriginalMask().shape)
 
                     # indexArray's shape is currently (2, width, height), which does not work for
                     #   the calculations we need to do. We're transposing it to (width, height, 2)
                     indexArray = np.transpose(indexArray, (1, 2, 0))
 
-                    v = np.array([math.sin(angleOfMotion), math.cos(angleOfMotion)])
+                    # Perpendicular vector
+                    # We have two perpendicular vectors that are possible - one that points
+                    #   upwards and another that points downwards. We need to pick the one
+                    #   that points downwards.
+                    # That would be on the bottom half of the unit circle - between pi and 2pi
+                    perpendicularAngleOfMotion = angleOfMotion
+                    proposedAngle = angleOfMotion - (math.pi / 2)
+                    if proposedAngle < 0:
+                        proposedAngle += math.pi * 2
+
+                    # I have no idea why this works.
+                    if math.pi <= proposedAngle <= math.pi * 2:
+                        perpendicularAngleOfMotion += (math.pi / 2)
+                    else:
+                        perpendicularAngleOfMotion -= (math.pi / 2) 
+
+                    v = np.array([math.sin(perpendicularAngleOfMotion), math.cos(perpendicularAngleOfMotion)])
 
                     distanceArray = indexArray @ v
 
@@ -405,20 +418,43 @@ if __name__ == "__main__":
 
                     farthestPoint = farthestPoints[0]
 
-                    tire1 = farthestPoint
-                    tire2 = None
+                    # Find our line equation
+                    tire1 = np.array([farthestPoint[0], farthestPoint[1]])
+                    tire2 = np.array([farthestPoint[0] + math.sin(angleOfMotion), farthestPoint[1] + math.cos(angleOfMotion)])
+                    # Rise over run
+                    m = (tire2[0] - tire1[0]) / (tire2[1] - tire1[1])
+                    b = tire1[0] - m*tire1[1]
+
+                    # Intersects with bottom of BB
+                    # Find X where Y = height of BB (remember, Y increases towards bottom of screen)
+                    tire1 = np.array([bb.getHeight(), (bb.getHeight() - b)/m])
+
+                    # Find Y where X = 0, or X = width of BB
+                    # If angleOfMotion is within Q1 or Q4, then we look for X = width of BB
+                    # Else, we look for X = 0
+                    # Keep in mind, angleOfMotion should be between math.pi and -math.pi
+                    if not (angleOfMotion >= -math.pi / 2 and angleOfMotion <= math.pi / 2):
+                        tire2 = np.array([m * bb.getWidth() + b, bb.getWidth()])
+                    else:
+                        tire2 = np.array([b, 0])
+
+                    #tire1 = farthestPoint
+                    #tire2 = None
+
+                    newAngle = math.atan2(tire1[0] - tire2[0], tire1[1] - tire2[1])
+                    print(f"ID: {vehicle.ID} angle: {math.degrees(angleOfMotion)} newAngle: {math.degrees(newAngle)} tire1: {tire1}, tire2: {tire2} farthestPoint {farthestPoint}")
 
                     # Try and find the other tire. It should be the farthest point that is *not* within a certain
                     #   range of the first tire
-                    for point in farthestPoints:
-                        if ((point[0] - farthestPoint[0]) ** 2 + (point[1] - farthestPoint[1]) ** 2) ** 0.5 > 15:
-                            tire2 = point
-                            break
+                    #for point in farthestPoints:
+                    #    if ((point[0] - farthestPoint[0]) ** 2 + (point[1] - farthestPoint[1]) ** 2) ** 0.5 > 15:
+                    #        tire2 = point
+                    #        break
 
                     if not (tire2 is None):
                         # X, Y coordinates for points
-                        tire1Warped = findPointInWarpedImage((tire1[1], tire1[0]), homography)
-                        tire2Warped = findPointInWarpedImage((tire2[1], tire2[0]), homography)
+                        tire1Warped = findPointInWarpedImage((tire1[1] + bb.getX(), tire1[0] + bb.getY()), homography)
+                        tire2Warped = findPointInWarpedImage((tire2[1] + bb.getX(), tire2[0] + bb.getY()), homography)
 
                         sample = ((tire1Warped[0] - tire2Warped[0]) ** 2 + (tire1Warped[1] - tire2Warped[1]) ** 2) ** 0.5
                         sample /= MEAN_SEDAN_LENGTH
@@ -435,10 +471,13 @@ if __name__ == "__main__":
         bbHistory = vehicle.getBoundingBoxHistory()
         for i in range(len(bbHistory)):
             # Select the bounding boxes that we want to compare
-            #oldBB = bbHistory[max(i - (config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES) // 2, 0)]
-            #newBB = bbHistory[min(i + (config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES+1) // 2, len(bbHistory) - 1)]
-            oldBB = bbHistory[max(i - 1, 0)]
-            newBB = bbHistory[min(i, len(bbHistory) - 1)]
+            oldBBIndex = max(i - (config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES) // 2, 0)
+            newBBIndex = min(i + (config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES+1) // 2, len(bbHistory) - 1)
+            r = newBBIndex - oldBBIndex
+            oldBB = bbHistory[oldBBIndex]
+            newBB = bbHistory[newBBIndex]
+            #oldBB = bbHistory[max(i - 1, 0)]
+            #newBB = bbHistory[min(i, len(bbHistory) - 1)]
 
             oldX, oldY = findPointInWarpedImage((oldBB.getCenterX(), oldBB.getY() + oldBB.getHeight()), homography)
             newX, newY = findPointInWarpedImage((newBB.getCenterX(), newBB.getY() + newBB.getHeight()), homography)
@@ -447,15 +486,15 @@ if __name__ == "__main__":
 
             totalMovementInPixels = math.sqrt((dx * dx) + (dy * dy))
 
-            metersPerSecond = (totalMovementInPixels * config.FPS) / pixelToMeterRatio
+            metersPerSecond = ((totalMovementInPixels * config.FPS) / r) / pixelToMeterRatio
             #car.KMH = (metersPerSecond * 60 * 60) / 1000
             vehicle.recordKMH((metersPerSecond * 60 * 60) / 1000)
 
         # Smooth the speed
-        vehicle.KMHHistory = np.convolve(
-            vehicle.KMHHistory,
-            np.array( [1/config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES for i in range(config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES)] )
-        ).tolist()
+        #vehicle.KMHHistory = np.convolve(
+        #    vehicle.KMHHistory,
+        #    np.array( [1/config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES for i in range(config.VEHICLE_SPEED_ESTIMATION_SMOOTHING_FRAMES)] )
+        #).tolist()
 
     # Draw the results to video
     print("Speed estimation complete, drawing results to output")
